@@ -171,8 +171,19 @@ class _RegionLabel {
   final bool italic;
   final double rotationDeg;
   final double fontSize;
+
+  /// maxWidth をプロット幅に対する割合で指定（帯域幅の約 80% を目安）。
+  final double widthFactor;
+
+  /// プロット枠内に座標をクランプするか（混合域ラベル用）。
+  final bool clamp;
+
   const _RegionLabel(this.en, this.ja, this.ph, this.hco3, this.color,
-      {this.italic = false, this.rotationDeg = 0, this.fontSize = 9});
+      {this.italic = false,
+      this.rotationDeg = 0,
+      this.fontSize = 10,
+      this.widthFactor = 0.24,
+      this.clamp = false});
 }
 
 class _CohenPainter extends CustomPainter {
@@ -198,6 +209,10 @@ class _CohenPainter extends CustomPainter {
   static const double mRight = 44;
   static const double mTop = 52;
   static const double mBottom = 34;
+
+  /// ラベルのフォント（バンドル日本語フォント）。CustomPainter 内の TextStyle は
+  /// テーマの fontFamily を継承しないため明示する。
+  static const String _font = 'NotoSansJP';
 
   late Rect _plot;
 
@@ -335,14 +350,16 @@ class _CohenPainter extends CustomPainter {
 
   void _drawPatient(Canvas canvas) {
     final c = _p(ph.clamp(minPh, maxPh), hco3.clamp(minHco3, maxHco3));
-    canvas.drawCircle(c, 7, Paint()..color = Colors.red);
+    // 視認性向上のため、白い輪郭を先に描いてから赤●を重ねる。
     canvas.drawCircle(
         c,
-        7,
+        8,
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2
           ..color = Colors.white);
+    canvas.drawCircle(c, 8, Paint()..color = Colors.white);
+    canvas.drawCircle(c, 6, Paint()..color = Colors.red);
   }
 
   // ---- PCO2 等圧線 ----
@@ -426,7 +443,7 @@ class _CohenPainter extends CustomPainter {
       canvas.drawLine(
           Offset(x, _plot.bottom), Offset(x, _plot.bottom + 4), axis);
       _text(canvas, ph.toStringAsFixed(1), Offset(x, _plot.bottom + 6),
-          color: ink, size: 8, center: true);
+          color: ink, size: 9, center: true);
     }
     _text(
         canvas,
@@ -442,7 +459,7 @@ class _CohenPainter extends CustomPainter {
       canvas.drawLine(Offset(_plot.left, y), Offset(_plot.right, y), grid);
       canvas.drawLine(Offset(_plot.left - 4, y), Offset(_plot.left, y), axis);
       _text(canvas, '$h', Offset(_plot.left - 6, y),
-          color: ink, size: 8, anchorRight: true, middle: true);
+          color: ink, size: 9, anchorRight: true, middle: true);
     }
     _textRotated(
         canvas,
@@ -454,14 +471,24 @@ class _CohenPainter extends CustomPainter {
         size: 9,
         angle: -math.pi / 2);
 
-    // 上軸: [H+] nmol/L
-    for (final hPlus in const [100, 90, 80, 70, 60, 50, 40, 30, 20]) {
-      final ph = 9 - _log10(hPlus.toDouble());
+    // 上軸: [H+] nmol/L（20–100 のみ）。
+    // [H+] = 10^(9-pH) nmol/L → 逆算 pH = 9 - log10([H+]) で座標変換。
+    // ラベルが重ならないよう最小間隔 20px を確保し、収まらない分は間引く。
+    final hEntries = <MapEntry<int, double>>[];
+    for (final h in const [20, 30, 40, 50, 60, 70, 80, 90, 100]) {
+      final ph = 9 - _log10(h.toDouble());
       if (ph < minPh || ph > maxPh) continue;
-      final x = _x(ph);
-      canvas.drawLine(Offset(x, _plot.top), Offset(x, _plot.top - 4), axis);
-      _text(canvas, '$hPlus', Offset(x, _plot.top - 14),
-          color: ink, size: 8, center: true);
+      hEntries.add(MapEntry(h, _x(ph)));
+    }
+    hEntries.sort((a, b) => a.value.compareTo(b.value));
+    double? lastX;
+    for (final e in hEntries) {
+      if (lastX != null && (e.value - lastX).abs() < 20) continue;
+      lastX = e.value;
+      canvas.drawLine(
+          Offset(e.value, _plot.top), Offset(e.value, _plot.top - 4), axis);
+      _text(canvas, '${e.key}', Offset(e.value, _plot.top - 13),
+          color: ink, size: 9, center: true);
     }
     _text(
         canvas,
@@ -479,53 +506,95 @@ class _CohenPainter extends CustomPainter {
   }
 
   // ---- 帯域・混合のラベル ----
-  static const List<_RegionLabel> _labels = [
-    // 主要領域（濃色）
-    _RegionLabel('Normal', '正常', 7.405, 22.0, Colors.black87, fontSize: 8),
-    _RegionLabel('Chronic\nrespiratory\nacidosis', '慢性\n呼吸性\nアシドーシス',
-        7.30, 40, Colors.black87, fontSize: 8.5),
-    _RegionLabel('Metabolic\nalkalosis', '代謝性\nアルカローシス', 7.55, 43,
-        Colors.black87, fontSize: 8.5),
-    _RegionLabel('Acute\nrespiratory\nacidosis', '急性\n呼吸性\nアシドーシス',
-        7.205, 28.5, Colors.black87, fontSize: 8, rotationDeg: -52),
+  // 主要障害名（10pt・指定の回転角）。
+  static const List<_RegionLabel> _mainLabels = [
+    _RegionLabel('Metabolic\nacidosis', '代謝性\nアシドーシス', 7.18, 10,
+        Colors.black87, rotationDeg: 0, widthFactor: 0.24),
+    _RegionLabel('Metabolic\nalkalosis', '代謝性\nアルカローシス', 7.56, 42,
+        Colors.black87, rotationDeg: 0, widthFactor: 0.26),
+    _RegionLabel('Acute\nrespiratory\nacidosis', '急性\n呼吸性\nアシドーシス', 7.275,
+        29, Colors.black87, rotationDeg: -30, widthFactor: 0.28),
+    _RegionLabel('Chronic\nrespiratory\nacidosis', '慢性\n呼吸性\nアシドーシス', 7.32,
+        38, Colors.black87, rotationDeg: -20, widthFactor: 0.30),
+    _RegionLabel('Acute\nrespiratory\nalkalosis', '急性\n呼吸性\nアルカローシス', 7.52,
+        21, Colors.black87, rotationDeg: 0, widthFactor: 0.24),
     _RegionLabel('Chronic\nrespiratory\nalkalosis', '慢性\n呼吸性\nアルカローシス',
-        7.50, 14.5, Colors.black87, fontSize: 8.5),
-    _RegionLabel('Acute\nrespiratory\nalkalosis', '急性\n呼吸性\nアルカローシス',
-        7.50, 20.5, Colors.black87, fontSize: 8),
-    _RegionLabel('Metabolic\nacidosis', '代謝性\nアシドーシス', 7.165, 7.5,
-        Colors.black87, fontSize: 8.5),
-    // 混合・代償不全（赤・斜体/回転）
-    _RegionLabel('Mixed\nResp.Acid.\n& Met. Alk.', '混合\n呼吸性アシ\n＋代謝性アルカ',
-        7.305, 51, Colors.red, italic: true, fontSize: 8),
-    _RegionLabel('Met.Alk.\nw/o expected\nResp. comp.', '代謝性アルカ\n代償不全',
-        7.63, 50, Colors.red, italic: true, fontSize: 8),
-    _RegionLabel('Mixed\nResp. & Met.\nAlkalosis', '混合\n呼吸性＋代謝性\nアルカローシス',
-        7.63, 31, Colors.red, italic: true, fontSize: 8, rotationDeg: -30),
-    _RegionLabel('Acute on\nChronic\nResp. Alk.', '急性 on 慢性\n呼吸性アルカ',
-        7.66, 12, Colors.red, italic: true, fontSize: 7.5, rotationDeg: -60),
-    _RegionLabel('Mixed\nMet.Acid.\n& Resp.Alk.', '混合\n代謝性アシ\n＋呼吸性アルカ',
-        7.45, 6, Colors.red, italic: true, fontSize: 8),
-    _RegionLabel('Mixed\nResp. & Met.\nAcidosis', '混合\n呼吸性＋代謝性\nアシドーシス',
-        7.135, 20, Colors.red, italic: true, fontSize: 8, rotationDeg: -52),
-    _RegionLabel('Met.Acid.\nw/o expected\nresp. comp.', '代謝性アシ\n代償不全',
-        7.10, 8, Colors.red, italic: true, fontSize: 7.5),
-    _RegionLabel('Acute on\nChronic\nResp. Acid.', '急性 on 慢性\n呼吸性アシ',
-        7.215, 34, Colors.red, italic: true, fontSize: 7.5, rotationDeg: -55),
+        7.56, 15, Colors.black87, rotationDeg: 20, widthFactor: 0.26),
   ];
 
-  void _drawLabels(Canvas canvas) {
-    for (final l in _labels) {
-      final pos = _p(l.ph, l.hco3);
-      if (!_plot.inflate(30).contains(pos)) continue;
-      final text = lang == NomogramLang.en ? l.en : l.ja;
-      _text(canvas, text, pos,
-          color: l.color,
-          size: l.fontSize,
-          center: true,
-          middle: true,
-          italic: l.italic,
-          angle: l.rotationDeg * math.pi / 180);
+  // 混合・代償不全（8pt・赤・斜体、枠内クランプ）。
+  static const List<_RegionLabel> _mixedLabels = [
+    _RegionLabel('Mixed\nResp.Acid.\n& Met. Alk.', '混合\n呼吸性アシ\n＋代謝性アルカ',
+        7.305, 51, Colors.red,
+        italic: true, fontSize: 8, widthFactor: 0.22, clamp: true),
+    _RegionLabel('Met.Alk.\nw/o expected\nResp. comp.', '代謝性アルカ\n代償不全なし',
+        7.64, 50, Colors.red,
+        italic: true, fontSize: 8, widthFactor: 0.22, clamp: true),
+    _RegionLabel('Mixed\nResp. & Met.\nAlkalosis', '混合\n呼吸性＋代謝性\nアルカローシス',
+        7.63, 31, Colors.red,
+        italic: true, fontSize: 8, rotationDeg: -30, widthFactor: 0.22,
+        clamp: true),
+    _RegionLabel('Acute on\nChronic\nResp. Alk.', '急性 on 慢性\n呼吸性アルカ', 7.66,
+        12, Colors.red,
+        italic: true, fontSize: 8, rotationDeg: -58, widthFactor: 0.20,
+        clamp: true),
+    _RegionLabel('Mixed\nMet.Acid.\n& Resp.Alk.', '混合\n代謝性アシ\n＋呼吸性アルカ',
+        7.45, 6, Colors.red,
+        italic: true, fontSize: 8, widthFactor: 0.22, clamp: true),
+    _RegionLabel('Mixed\nResp. & Met.\nAcidosis', '混合\n呼吸性＋代謝性\nアシドーシス',
+        7.135, 20, Colors.red,
+        italic: true, fontSize: 8, rotationDeg: -52, widthFactor: 0.22,
+        clamp: true),
+    _RegionLabel('Met.Acid.\nw/o expected\nresp. comp.', '代謝性アシ\n代償不全なし',
+        7.10, 8, Colors.red,
+        italic: true, fontSize: 8, widthFactor: 0.20, clamp: true),
+    _RegionLabel('Acute on\nChronic\nResp. Acid.', '急性 on 慢性\n呼吸性アシ', 7.215,
+        34, Colors.red,
+        italic: true, fontSize: 8, rotationDeg: -32, widthFactor: 0.20,
+        clamp: true),
+  ];
+
+  Offset _labelPos(_RegionLabel l) {
+    var pos = _p(l.ph, l.hco3);
+    if (l.clamp) {
+      pos = Offset(
+        pos.dx.clamp(_plot.left + 4, _plot.right - 4),
+        pos.dy.clamp(_plot.top + 4, _plot.bottom - 4),
+      );
     }
+    return pos;
+  }
+
+  void _drawLabel(Canvas canvas, _RegionLabel l) {
+    final pos = _labelPos(l);
+    final text = lang == NomogramLang.en ? l.en : l.ja;
+    _text(canvas, text, pos,
+        color: l.color,
+        size: l.fontSize,
+        center: true,
+        middle: true,
+        italic: l.italic,
+        angle: l.rotationDeg * math.pi / 180,
+        maxWidth: l.widthFactor * _plot.width);
+  }
+
+  void _drawLabels(Canvas canvas) {
+    for (final l in _mixedLabels) {
+      _drawLabel(canvas, l);
+    }
+    for (final l in _mainLabels) {
+      _drawLabel(canvas, l);
+    }
+    _drawNormalLabel(canvas);
+  }
+
+  /// 「Normal」は正常楕円の右横（+8px）に配置し、プロット点と分離する。
+  void _drawNormalLabel(Canvas canvas) {
+    final center = _p(7.40, 24);
+    final rx = (0.035 / (maxPh - minPh)) * _plot.width;
+    final pos = Offset(center.dx + rx + 8, center.dy);
+    _text(canvas, lang == NomogramLang.en ? 'Normal' : '正常', pos,
+        color: Colors.black87, size: 10, anchorLeft: true, middle: true);
   }
 
   // ---- テキスト描画ヘルパ ----
@@ -537,7 +606,8 @@ class _CohenPainter extends CustomPainter {
       bool anchorRight = false,
       bool anchorLeft = false,
       bool italic = false,
-      double angle = 0}) {
+      double angle = 0,
+      double? maxWidth}) {
     final tp = TextPainter(
       text: TextSpan(
           text: s,
@@ -545,10 +615,13 @@ class _CohenPainter extends CustomPainter {
               color: color,
               fontSize: size,
               height: 1.05,
+              fontFamily: _font,
               fontStyle: italic ? FontStyle.italic : FontStyle.normal)),
       textAlign: TextAlign.center,
       textDirection: TextDirection.ltr,
-    )..layout();
+      maxLines: 3,
+      ellipsis: '…',
+    )..layout(maxWidth: maxWidth ?? double.infinity);
     var dx = at.dx;
     var dy = at.dy;
     if (center) dx -= tp.width / 2;
@@ -571,7 +644,8 @@ class _CohenPainter extends CustomPainter {
       {required Color color, double size = 9, required double angle}) {
     final tp = TextPainter(
       text: TextSpan(
-          text: s, style: TextStyle(color: color, fontSize: size)),
+          text: s,
+          style: TextStyle(color: color, fontSize: size, fontFamily: _font)),
       textDirection: TextDirection.ltr,
     )..layout();
     canvas.save();
