@@ -346,7 +346,7 @@ class _HomeScreenState extends State<HomeScreen> {
               _field(_alb, 'Alb (g/dL) 任意', hint: '既定 4.0'),
             ]),
             _group('その他（任意）', [
-              _field(_be, 'BE (mEq/L)', hint: '例: -2'),
+              _field(_be, 'BE (mEq/L)', hint: '例: -2', negatable: true),
               _field(_temp, '体温 (℃)', hint: '例: 37'),
             ]),
             const SizedBox(height: 8),
@@ -488,13 +488,31 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _field(TextEditingController c, String label, {String? hint}) {
+  /// 入力値の符号（先頭のマイナス）を反転する。
+  /// iOS Safari/PWA の数値テンキーには「-」キーが無いため、この ± ボタンで対応する。
+  void _toggleSign(TextEditingController c) {
+    final t = c.text.trim();
+    final String next;
+    if (t.startsWith('-')) {
+      next = t.substring(1);
+    } else if (t.isEmpty) {
+      next = '-';
+    } else {
+      next = '-$t';
+    }
+    c.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: next.length),
+    );
+  }
+
+  Widget _field(TextEditingController c, String label,
+      {String? hint, bool negatable = false}) {
     return SizedBox(
       width: 160,
       child: TextField(
         controller: c,
-        // iOS のテンキーで「+/-」を表示しマイナス値を入力可能にする
-        // （BE・体温などマイナス値が入りうる項目のため全フィールドで signed:true）。
+        // ネイティブ(iOS/Android)アプリでは signed:true でテンキーに「+/-」が出る。
         keyboardType:
             const TextInputType.numberWithOptions(decimal: true, signed: true),
         inputFormatters: [
@@ -503,6 +521,20 @@ class _HomeScreenState extends State<HomeScreen> {
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
+          // iOS Safari/PWA のテンキーには「-」が無いため、符号反転ボタンを併設。
+          suffixIcon: negatable
+              ? IconButton(
+                  tooltip: '符号 (+/-) を反転',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints:
+                      const BoxConstraints(minWidth: 36, minHeight: 36),
+                  icon: const Text('±',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  onPressed: () => _toggleSign(c),
+                )
+              : null,
         ),
       ),
     );
