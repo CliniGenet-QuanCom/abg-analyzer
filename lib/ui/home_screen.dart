@@ -330,8 +330,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
             const SizedBox(height: 8),
             _group('必須項目', [
-              _field(_ph, 'pH', hint: _venous ? '例: 7.36' : '例: 7.35',
-                  signed: false),
+              _field(_ph, 'pH', hint: _venous ? '例: 7.36' : '例: 7.35'),
               _field(_paco2, '${_venous ? 'PvCO2' : 'PaCO2'} (mmHg)',
                   hint: _venous ? '例: 46' : '例: 40'),
               _field(_hco3, 'HCO3- (mEq/L)', hint: '例: 24'),
@@ -347,7 +346,7 @@ class _HomeScreenState extends State<HomeScreen> {
               _field(_alb, 'Alb (g/dL) 任意', hint: '既定 4.0'),
             ]),
             _group('その他（任意）', [
-              _field(_be, 'BE (mEq/L)', hint: '例: -2', signed: true),
+              _field(_be, 'BE (mEq/L)', hint: '例: -2'),
               _field(_temp, '体温 (℃)', hint: '例: 37'),
             ]),
             const SizedBox(height: 8),
@@ -489,14 +488,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _field(TextEditingController c, String label,
-      {String? hint, bool signed = false}) {
+  Widget _field(TextEditingController c, String label, {String? hint}) {
     return SizedBox(
       width: 160,
       child: TextField(
         controller: c,
+        // iOS のテンキーで「+/-」を表示しマイナス値を入力可能にする
+        // （BE・体温などマイナス値が入りうる項目のため全フィールドで signed:true）。
         keyboardType:
-            TextInputType.numberWithOptions(decimal: true, signed: signed),
+            const TextInputType.numberWithOptions(decimal: true, signed: true),
         inputFormatters: [
           FilteringTextInputFormatter.allow(RegExp(r'[0-9.\-]')),
         ],
