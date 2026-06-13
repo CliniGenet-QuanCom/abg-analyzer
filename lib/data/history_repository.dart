@@ -41,7 +41,24 @@ class HistoryEntry {
 class HistoryRepository {
   static const _historyKey = 'abg_history';
   static const _disclaimerKey = 'abg_disclaimer_accepted';
+  static const _localeKey = 'abg_locale';
   static const _maxEntries = 100;
+
+  /// 保存された言語コード（null = 端末設定に従う）。
+  Future<String?> getLocaleCode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_localeKey);
+  }
+
+  /// 言語コードを保存（null で端末設定に戻す）。
+  Future<void> setLocaleCode(String? code) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (code == null) {
+      await prefs.remove(_localeKey);
+    } else {
+      await prefs.setString(_localeKey, code);
+    }
+  }
 
   Future<List<HistoryEntry>> load() async {
     final prefs = await SharedPreferences.getInstance();

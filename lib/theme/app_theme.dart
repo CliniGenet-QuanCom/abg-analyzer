@@ -6,19 +6,24 @@ import '../models/abg_result.dart';
 class AppTheme {
   static const Color seed = Color(0xFF00696E); // ティール系
 
-  static ThemeData light() => _themed(Brightness.light);
-  static ThemeData dark() => _themed(Brightness.dark);
+  static ThemeData light({String? fontFamily}) =>
+      _themed(Brightness.light, fontFamily);
+  static ThemeData dark({String? fontFamily}) =>
+      _themed(Brightness.dark, fontFamily);
 
   /// アプリにバンドルした日本語フォントのファミリ名（pubspec の fonts と一致）。
-  static const String fontFamily = 'NotoSansJP';
+  static const String jaFontFamily = 'NotoSansJP';
 
-  /// 日本語フォント（Noto Sans JP）をアプリ全体に適用する。
+  /// ロケールに応じたフォントファミリを返す。
   ///
-  /// 既定のフォントフォールバックでは漢字（解・脈・化 など）が中国語グリフで
-  /// 表示されることがあるため、バンドルした Noto Sans JP を fontFamily に設定する。
-  /// ThemeData の fontFamily は textTheme 全体へ適用されるため、個別 TextStyle も
-  /// （fontFamily を明示していない限り）これを継承する。
-  static ThemeData _themed(Brightness brightness) {
+  /// 日本語ではバンドルの Noto Sans JP を使う（漢字が中国語グリフへフォールバック
+  /// するのを防ぎ、オフラインでも正しく表示するため）。中国語・韓国語・英語では
+  /// null を返し、端末の各言語フォント（簡体字・ハングル等）に委ねる。
+  /// （Noto Sans JP はハングルを含まず、簡体字は日本語字形になるため。）
+  static String? fontFamilyFor(String? languageCode) =>
+      languageCode == 'ja' ? jaFontFamily : null;
+
+  static ThemeData _themed(Brightness brightness, String? fontFamily) {
     final base = ThemeData(
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(

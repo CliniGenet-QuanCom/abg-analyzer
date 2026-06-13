@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../data/history_repository.dart';
 import '../data/reference_ranges.dart';
+import '../l10n/app_l.dart';
 import '../logic/abg_analyzer.dart';
 import '../models/abg_input.dart';
 import '../models/abg_result.dart';
@@ -18,7 +19,13 @@ import 'result_view.dart';
 class HomeScreen extends StatefulWidget {
   final HistoryRepository repo;
   final ValueNotifier<ThemeMode> themeMode;
-  const HomeScreen({super.key, required this.repo, required this.themeMode});
+  final ValueNotifier<Locale?> locale;
+  const HomeScreen({
+    super.key,
+    required this.repo,
+    required this.themeMode,
+    required this.locale,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -86,12 +93,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final paco2 = _parse(_paco2);
     final hco3 = _parse(_hco3);
 
+    final l = AppL.ofContext(context);
     if (ph == null || paco2 == null || hco3 == null) {
-      _snack('pH・PaCO2・HCO3- は必須です（数値を入力してください）。');
+      _snack(l.snackRequired);
       return;
     }
     if (ph < 6.5 || ph > 8.0) {
-      _snack('pH の値が想定範囲外です（6.5–8.0）。入力を確認してください。');
+      _snack(l.snackPhRange);
       return;
     }
 
@@ -110,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final ranges =
         ReferenceRanges.select(venous: _venous, pediatric: _pediatric);
-    final result = AbgAnalyzer.analyze(input, ranges: ranges);
+    final result = AbgAnalyzer.analyze(input, l: l, ranges: ranges);
 
     setState(() {
       _result = result;
@@ -157,15 +165,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _copy() async {
     if (_result == null) return;
-    await Clipboard.setData(ClipboardData(text: _result!.toShareText()));
-    _snack('結果をクリップボードにコピーしました。');
+    final l = AppL.ofContext(context);
+    await Clipboard.setData(ClipboardData(text: _result!.toShareText(l)));
+    _snack(l.snackCopied);
   }
 
   Future<void> _share() async {
     if (_result == null) return;
+    final l = AppL.ofContext(context);
     try {
       await SharePlus.instance.share(
-        ShareParams(text: _result!.toShareText(), subject: 'ABG 解釈結果'),
+        ShareParams(text: _result!.toShareText(l), subject: l.appTitle),
       );
     } catch (_) {
       await _copy(); // 共有が使えない環境ではコピーにフォールバック
@@ -173,6 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _ocrMenu() {
+    final l = AppL.ofContext(context);
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
@@ -181,7 +192,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.photo_camera),
-              title: const Text('カメラで撮影'),
+              title: Text(l.ocrCamera),
               onTap: () {
                 Navigator.pop(ctx);
                 _runOcr(CaptureSource.camera);
@@ -189,7 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.photo_library),
-              title: const Text('画像を選択'),
+              title: Text(l.ocrGallery),
               onTap: () {
                 Navigator.pop(ctx);
                 _runOcr(CaptureSource.gallery);
@@ -213,7 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
       extraction = await _ocr.capture(source);
     } catch (e) {
       if (mounted) Navigator.of(context, rootNavigator: true).maybePop();
-      _snack('OCR に失敗しました: $e');
+      if (mounted) _snack(AppL.ofContext(context).snackOcrFailed('$e'));
       return;
     }
     if (mounted) Navigator.of(context, rootNavigator: true).maybePop();
@@ -239,7 +250,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
     setState(() => _result = null);
-    _snack('$count 項目をフォームに反映しました。値を確認してください。');
+    if (mounted) _snack(AppL.ofContext(context).snackOcrApplied(count));
   }
 
   void _loadFromHistory(AbgInput input, bool pediatric, bool venous) {
@@ -269,12 +280,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppL.ofContext(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ABG/VBG判定'),
+        title: Text(l.appBarTitle),
         actions: [
+          _languageMenu(l),
           IconButton(
-            tooltip: 'テーマ切替',
+            tooltip: l.toggleTheme,
             icon: const Icon(Icons.brightness_6),
             onPressed: () {
               final m = widget.themeMode.value;
@@ -284,7 +297,7 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
           IconButton(
-            tooltip: '履歴',
+            tooltip: l.historyMenu,
             icon: const Icon(Icons.history),
             onPressed: () async {
               await Navigator.of(context).push(MaterialPageRoute(
@@ -304,8 +317,7 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             },
             itemBuilder: (_) => [
-              const PopupMenuItem(
-                  value: 'disclaimer', child: Text('免責事項')),
+              PopupMenuItem(value: 'disclaimer', child: Text(l.disclaimerMenu)),
             ],
           ),
         ],
@@ -324,30 +336,30 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: OutlinedButton.icon(
                   onPressed: _ocrMenu,
                   icon: const Icon(Icons.document_scanner),
-                  label: const Text('結果用紙を撮影して自動入力 (OCR)'),
+                  label: Text(l.ocrButton),
                 ),
               ),
             ],
             const SizedBox(height: 8),
-            _group('必須項目', [
-              _field(_ph, 'pH', hint: _venous ? '例: 7.36' : '例: 7.35'),
-              _field(_paco2, '${_venous ? 'PvCO2' : 'PaCO2'} (mmHg)',
-                  hint: _venous ? '例: 46' : '例: 40'),
-              _field(_hco3, 'HCO3- (mEq/L)', hint: '例: 24'),
+            _group(l.groupRequired, [
+              _field(_ph, l.fieldPh, hint: l.hintEg(_venous ? '7.36' : '7.35')),
+              _field(_paco2, _venous ? l.fieldPvco2 : l.fieldPaco2,
+                  hint: l.hintEg(_venous ? '46' : '40')),
+              _field(_hco3, l.fieldHco3, hint: l.hintEg('24')),
             ]),
-            _group(_venous ? '酸素化（静脈血では非適用）' : '酸素化', [
-              _field(_pao2, '${_venous ? 'PvO2' : 'PaO2'} (mmHg)',
-                  hint: _venous ? '参考値' : '例: 90'),
-              _field(_fio2, 'FiO2 (%)', hint: '室内気=21'),
+            _group(_venous ? l.groupOxygenationVenousNa : l.groupOxygenation, [
+              _field(_pao2, _venous ? l.fieldPvo2 : l.fieldPao2,
+                  hint: _venous ? l.hintReference : l.hintEg('90')),
+              _field(_fio2, l.fieldFio2, hint: l.hintFio2RoomAir),
             ]),
-            _group('電解質（AG 計算用）', [
-              _field(_na, 'Na (mEq/L)', hint: '例: 140'),
-              _field(_cl, 'Cl (mEq/L)', hint: '例: 104'),
-              _field(_alb, 'Alb (g/dL) 任意', hint: '既定 4.0'),
+            _group(l.groupElectrolytes, [
+              _field(_na, l.fieldNa, hint: l.hintEg('140')),
+              _field(_cl, l.fieldCl, hint: l.hintEg('104')),
+              _field(_alb, l.fieldAlb, hint: l.hintAlbDefault),
             ]),
-            _group('その他（任意）', [
-              _field(_be, 'BE (mEq/L)', hint: '例: -2', negatable: true),
-              _field(_temp, '体温 (℃)', hint: '例: 37'),
+            _group(l.groupOther, [
+              _field(_be, l.fieldBe, hint: l.hintEg('-2'), negatable: true),
+              _field(_temp, l.fieldTemp, hint: l.hintEg('37')),
             ]),
             const SizedBox(height: 8),
             Row(
@@ -356,14 +368,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: FilledButton.icon(
                     onPressed: _analyze,
                     icon: const Icon(Icons.calculate),
-                    label: const Text('解釈する'),
+                    label: Text(l.interpret),
                   ),
                 ),
                 const SizedBox(width: 8),
                 OutlinedButton.icon(
                   onPressed: _clear,
                   icon: const Icon(Icons.clear),
-                  label: const Text('クリア'),
+                  label: Text(l.clear),
                 ),
               ],
             ),
@@ -375,7 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: OutlinedButton.icon(
                       onPressed: _copy,
                       icon: const Icon(Icons.copy),
-                      label: const Text('コピー'),
+                      label: Text(l.copy),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -383,7 +395,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: OutlinedButton.icon(
                       onPressed: _share,
                       icon: const Icon(Icons.share),
-                      label: const Text('共有'),
+                      label: Text(l.share),
                     ),
                   ),
                 ],
@@ -404,7 +416,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 size: 18,
                                 color: Theme.of(context).colorScheme.primary),
                             const SizedBox(width: 8),
-                            Text('酸塩基平衡ノモグラム (Cohen)',
+                            Text(l.nomoTitle,
                                 style: Theme.of(context)
                                     .textTheme
                                     .titleSmall
@@ -434,18 +446,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _sampleTypeSelector() {
+    final l = AppL.ofContext(context);
     return SizedBox(
       width: double.infinity,
       child: SegmentedButton<bool>(
-        segments: const [
+        segments: [
           ButtonSegment(
               value: false,
-              label: Text('動脈血 (ABG)'),
-              icon: Icon(Icons.favorite)),
+              label: Text(l.arterialAbg),
+              icon: const Icon(Icons.favorite)),
           ButtonSegment(
               value: true,
-              label: Text('静脈血 (VBG)'),
-              icon: Icon(Icons.bloodtype)),
+              label: Text(l.venousVbg),
+              icon: const Icon(Icons.bloodtype)),
         ],
         selected: {_venous},
         onSelectionChanged: (s) => setState(() {
@@ -457,14 +470,39 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _patientTypeSelector() {
+    final l = AppL.ofContext(context);
     return SegmentedButton<bool>(
-      segments: const [
-        ButtonSegment(value: false, label: Text('成人'), icon: Icon(Icons.person)),
+      segments: [
         ButtonSegment(
-            value: true, label: Text('小児'), icon: Icon(Icons.child_care)),
+            value: false, label: Text(l.adult), icon: const Icon(Icons.person)),
+        ButtonSegment(
+            value: true,
+            label: Text(l.pediatric),
+            icon: const Icon(Icons.child_care)),
       ],
       selected: {_pediatric},
       onSelectionChanged: (s) => setState(() => _pediatric = s.first),
+    );
+  }
+
+  /// 言語切替メニュー（端末設定＋4言語）。選択は永続化する。
+  Widget _languageMenu(AppL l) {
+    return PopupMenuButton<String>(
+      tooltip: l.selectLanguage,
+      icon: const Icon(Icons.translate),
+      onSelected: (code) async {
+        final newLocale = code == 'system' ? null : Locale(code);
+        widget.locale.value = newLocale;
+        await widget.repo.setLocaleCode(code == 'system' ? null : code);
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem(value: 'system', child: Text(l.systemDefault)),
+        const PopupMenuDivider(),
+        for (final loc in AppL.supportedLocales)
+          PopupMenuItem(
+              value: loc.languageCode,
+              child: Text(AppL.of(loc).languageName)),
+      ],
     );
   }
 
@@ -524,7 +562,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // iOS Safari/PWA のテンキーには「-」が無いため、符号反転ボタンを併設。
           suffixIcon: negatable
               ? IconButton(
-                  tooltip: '符号 (+/-) を反転',
+                  tooltip: AppL.ofContext(context).toggleSign,
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
                   constraints:

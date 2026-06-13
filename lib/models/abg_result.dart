@@ -1,3 +1,5 @@
+import '../l10n/app_l.dart';
+
 /// 解釈結果の重大度（色分けに使用）。
 enum Severity {
   normal, // 緑
@@ -49,28 +51,28 @@ class AbgResult {
     this.modeNote,
   });
 
-  /// コピー・共有用のプレーンテキスト。
-  String toShareText() {
+  /// コピー・共有用のプレーンテキスト（多言語）。
+  String toShareText(AppL l) {
     final b = StringBuffer();
-    b.writeln('【血液ガス 解釈結果】');
-    if (modeNote != null) b.writeln('［$modeNote］');
-    b.writeln('一次診断: $primaryDiagnosis');
+    b.writeln(l.shareHeader);
+    if (modeNote != null) b.writeln(l.shareModeNote(modeNote!));
+    b.writeln(l.sharePrimary(primaryDiagnosis));
     b.writeln('');
     for (final s in sections) {
       b.writeln('■ ${s.title}');
-      for (final l in s.lines) {
-        b.writeln('  ・${l.text}');
+      for (final line in s.lines) {
+        b.writeln('  ・${line.text}');
       }
       b.writeln('');
     }
     if (clinicalSuggestions.isNotEmpty) {
-      b.writeln('■ 臨床的示唆 / 鑑別診断');
+      b.writeln('■ ${l.shareSuggestionsHeader}');
       for (final c in clinicalSuggestions) {
         b.writeln('  ・$c');
       }
       b.writeln('');
     }
-    b.writeln('※ 本結果は臨床判断の補助です。最終判断は必ず医療者が行ってください。');
+    b.writeln(l.shareDisclaimer);
     return b.toString();
   }
 }

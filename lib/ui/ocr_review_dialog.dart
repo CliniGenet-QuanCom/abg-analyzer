@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../l10n/app_l.dart';
 import '../services/ocr_parser.dart';
 
 /// OCR 抽出結果を確認・手動修正してからフォームに反映するためのダイアログ。
@@ -60,7 +61,7 @@ class _OcrReviewDialogState extends State<OcrReviewDialog> {
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Text(
-        '参考（計算には未使用）: ${items.join(' / ')}',
+        AppL.ofContext(context).ocrReference(items.join(' / ')),
         style: Theme.of(context).textTheme.bodySmall,
       ),
     );
@@ -68,10 +69,10 @@ class _OcrReviewDialogState extends State<OcrReviewDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final found =
-        widget.values.values.where((v) => v != null).length;
+    final l = AppL.ofContext(context);
+    final found = widget.values.values.where((v) => v != null).length;
     return AlertDialog(
-      title: const Text('OCR 結果の確認'),
+      title: Text(l.ocrReviewTitle),
       content: SizedBox(
         width: 360,
         child: SingleChildScrollView(
@@ -80,8 +81,7 @@ class _OcrReviewDialogState extends State<OcrReviewDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                '$found / ${AbgOcrParser.fields.length} 項目を自動抽出しました。'
-                '誤りがあれば修正してから反映してください。',
+                l.ocrReviewDesc(found, AbgOcrParser.fields.length),
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
@@ -119,7 +119,7 @@ class _OcrReviewDialogState extends State<OcrReviewDialog> {
               const SizedBox(height: 8),
               ExpansionTile(
                 tilePadding: EdgeInsets.zero,
-                title: Text('認識した全文を表示',
+                title: Text(l.ocrShowRaw,
                     style: Theme.of(context).textTheme.bodyMedium),
                 childrenPadding: const EdgeInsets.only(bottom: 8),
                 children: [
@@ -133,7 +133,7 @@ class _OcrReviewDialogState extends State<OcrReviewDialog> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: SelectableText(
-                      widget.rawText.isEmpty ? '(テキストを認識できませんでした)' : widget.rawText,
+                      widget.rawText.isEmpty ? l.ocrNoText : widget.rawText,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
@@ -146,7 +146,7 @@ class _OcrReviewDialogState extends State<OcrReviewDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('キャンセル'),
+          child: Text(l.cancel),
         ),
         FilledButton.icon(
           onPressed: () {
@@ -156,7 +156,7 @@ class _OcrReviewDialogState extends State<OcrReviewDialog> {
             Navigator.pop(context, result);
           },
           icon: const Icon(Icons.input),
-          label: const Text('フォームに反映'),
+          label: Text(l.ocrApply),
         ),
       ],
     );

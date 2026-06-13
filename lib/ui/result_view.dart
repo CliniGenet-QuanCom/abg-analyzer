@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_l.dart';
 import '../models/abg_result.dart';
 import '../theme/app_theme.dart';
 
@@ -63,7 +64,7 @@ class ResultView extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('一次診断',
+                  Text(AppL.ofContext(context).primaryDiagnosisLabel,
                       style: Theme.of(context)
                           .textTheme
                           .labelMedium
@@ -157,7 +158,7 @@ class ResultView extends StatelessWidget {
                 Icon(Icons.lightbulb_outline,
                     size: 18, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(width: 8),
-                Text('臨床的示唆 / 鑑別診断',
+                Text(AppL.ofContext(context).clinicalSuggestionsTitle,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(context).colorScheme.primary)),

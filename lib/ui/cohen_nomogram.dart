@@ -2,8 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// 表示言語。
-enum NomogramLang { en, ja }
+import '../l10n/app_l.dart';
+import '../theme/app_theme.dart';
 
 /// 酸塩基平衡ノモグラム（Cohen 図）。
 ///
@@ -29,37 +29,31 @@ class CohenNomogram extends StatefulWidget {
 }
 
 class _CohenNomogramState extends State<CohenNomogram> {
-  NomogramLang _lang = NomogramLang.en;
-
-  void _toggleLang() => setState(
-      () => _lang = _lang == NomogramLang.en ? NomogramLang.ja : NomogramLang.en);
-
   void _showInfo(BuildContext context) {
+    final l = AppL.ofContext(context);
     showDialog<void>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(_lang == NomogramLang.en ? 'Plotted point' : 'プロット点'),
+        title: Text(l.nomoPlottedPoint),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('pH: ${widget.ph.toStringAsFixed(2)}'),
             Text('HCO3-: ${widget.hco3.toStringAsFixed(1)} mmol/L'),
-            Text('PaCO2(calc): '
+            Text('${l.nomoPaco2CalcPrefix}'
                 '${_pco2From(widget.ph, widget.hco3).toStringAsFixed(1)} mmHg'),
             const SizedBox(height: 8),
             if (widget.classification.isNotEmpty)
               Text(
-                (_lang == NomogramLang.en ? 'Assessment: ' : '判定: ') +
-                    widget.classification,
+                '${l.nomoAssessmentPrefix}${widget.classification}',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
           ],
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK')),
+              onPressed: () => Navigator.pop(context), child: const Text('OK')),
         ],
       ),
     );
@@ -69,6 +63,9 @@ class _CohenNomogramState extends State<CohenNomogram> {
       hco3 / (0.03 * math.pow(10, ph - 6.1));
 
   Widget _chart(BuildContext context, {required bool fullScreen}) {
+    final l = AppL.ofContext(context);
+    final fontFamily =
+        AppTheme.fontFamilyFor(Localizations.localeOf(context).languageCode);
     return LayoutBuilder(builder: (context, constraints) {
       final side = math.min(constraints.maxWidth,
           fullScreen ? constraints.maxHeight : constraints.maxWidth);
@@ -87,7 +84,8 @@ class _CohenNomogramState extends State<CohenNomogram> {
                 painter: _CohenPainter(
                   ph: widget.ph,
                   hco3: widget.hco3,
-                  lang: _lang,
+                  l: l,
+                  fontFamily: fontFamily,
                   brightness: Theme.of(context).brightness,
                 ),
               ),
@@ -99,23 +97,10 @@ class _CohenNomogramState extends State<CohenNomogram> {
   }
 
   void _openFullScreen() {
+    final l = AppL.ofContext(context);
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => Scaffold(
-        appBar: AppBar(
-          title: Text(_lang == NomogramLang.en
-              ? 'Acid–Base Nomogram'
-              : '酸塩基平衡ノモグラム'),
-          actions: [
-            TextButton(
-              onPressed: _toggleLang,
-              child: Text(
-                _lang == NomogramLang.en ? '日本語' : 'EN',
-                style: TextStyle(
-                    color: Theme.of(context).colorScheme.onPrimary),
-              ),
-            ),
-          ],
-        ),
+        appBar: AppBar(title: Text(l.nomoTitle)),
         body: Padding(
           padding: const EdgeInsets.all(8),
           child: _chart(context, fullScreen: true),
@@ -126,19 +111,15 @@ class _CohenNomogramState extends State<CohenNomogram> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppL.ofContext(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            TextButton.icon(
-              onPressed: _toggleLang,
-              icon: const Icon(Icons.translate, size: 18),
-              label: Text(_lang == NomogramLang.en ? '日本語' : 'EN'),
-            ),
             IconButton(
-              tooltip: _lang == NomogramLang.en ? 'Full screen' : '全画面',
+              tooltip: l.nomoFullScreen,
               icon: const Icon(Icons.fullscreen),
               onPressed: _openFullScreen,
             ),
@@ -149,9 +130,7 @@ class _CohenNomogramState extends State<CohenNomogram> {
           child: _chart(context, fullScreen: false),
         ),
         Text(
-          _lang == NomogramLang.en
-              ? 'Tap the chart to show values / pinch to zoom.'
-              : 'グラフをタップで数値表示 / ピンチでズーム。',
+          l.nomoTapHint,
           style: Theme.of(context).textTheme.bodySmall,
           textAlign: TextAlign.center,
         ),
@@ -163,8 +142,7 @@ class _CohenNomogramState extends State<CohenNomogram> {
 // ---------------------------------------------------------------------------
 
 class _RegionLabel {
-  final String en;
-  final String ja;
+  final String text;
   final double ph;
   final double hco3;
   final Color color;
@@ -177,7 +155,7 @@ class _RegionLabel {
   /// プロット枠内に座標をクランプするか（混合域ラベル用）。
   final bool clamp;
 
-  const _RegionLabel(this.en, this.ja, this.ph, this.hco3, this.color,
+  const _RegionLabel(this.text, this.ph, this.hco3, this.color,
       {this.italic = false,
       this.fontSize = 10,
       this.widthFactor = 0.24,
@@ -187,13 +165,15 @@ class _RegionLabel {
 class _CohenPainter extends CustomPainter {
   final double ph;
   final double hco3;
-  final NomogramLang lang;
+  final AppL l;
+  final String? fontFamily;
   final Brightness brightness;
 
   _CohenPainter({
     required this.ph,
     required this.hco3,
-    required this.lang,
+    required this.l,
+    required this.fontFamily,
     required this.brightness,
   });
 
@@ -207,10 +187,6 @@ class _CohenPainter extends CustomPainter {
   static const double mRight = 44;
   static const double mTop = 60;
   static const double mBottom = 34;
-
-  /// ラベルのフォント（バンドル日本語フォント）。CustomPainter 内の TextStyle は
-  /// テーマの fontFamily を継承しないため明示する。
-  static const String _font = 'NotoSansJP';
 
   late Rect _plot;
 
@@ -442,13 +418,8 @@ class _CohenPainter extends CustomPainter {
       _text(canvas, ph.toStringAsFixed(1), Offset(x, _plot.bottom + 6),
           color: ink, size: 9, center: true);
     }
-    _text(
-        canvas,
-        lang == NomogramLang.en ? 'Arterial blood pH' : '動脈血 pH',
-        Offset(_plot.center.dx, size.height - 11),
-        color: ink,
-        size: 9,
-        center: true);
+    _text(canvas, l.axisPh, Offset(_plot.center.dx, size.height - 11),
+        color: ink, size: 9, center: true);
 
     // 左軸: HCO3
     for (var h = 0; h <= 60; h += 4) {
@@ -458,15 +429,8 @@ class _CohenPainter extends CustomPainter {
       _text(canvas, '$h', Offset(_plot.left - 6, y),
           color: ink, size: 9, anchorRight: true, middle: true);
     }
-    _textRotated(
-        canvas,
-        lang == NomogramLang.en
-            ? 'Arterial plasma [HCO3-] (mmol/L)'
-            : '動脈血漿 [HCO3-] (mmol/L)',
-        Offset(10, _plot.center.dy),
-        color: ink,
-        size: 9,
-        angle: -math.pi / 2);
+    _textRotated(canvas, l.axisHco3, Offset(10, _plot.center.dy),
+        color: ink, size: 9, angle: -math.pi / 2);
 
     // 上軸: [H+] nmol/L（20–100 のみ）。
     // [H+] = 10^(9-pH) nmol/L → 逆算 pH = 9 - log10([H+]) で座標変換。
@@ -487,69 +451,52 @@ class _CohenPainter extends CustomPainter {
       _text(canvas, '${e.key}', Offset(e.value, _plot.top - 13),
           color: ink, size: 9, center: true);
     }
-    _text(
-        canvas,
-        lang == NomogramLang.en
-            ? 'Arterial blood [H+] (nmol/L)'
-            : '動脈血 [H+] (nmol/L)',
-        Offset(_plot.center.dx, 4),
-        color: ink,
-        size: 9,
-        center: true);
+    _text(canvas, l.axisHplus, Offset(_plot.center.dx, 4),
+        color: ink, size: 9, center: true);
 
     // 右軸タイトル: pCO2
-    _textRotated(canvas, 'pCO2 (mmHg)', Offset(size.width - 8, _plot.center.dy),
+    _textRotated(canvas, l.axisPco2, Offset(size.width - 8, _plot.center.dy),
         color: ink, size: 9, angle: math.pi / 2);
   }
 
-  // ---- 帯域・混合のラベル ----
+  // ---- 帯域・混合のラベル（座標・スタイルは固定、文言は l から取得） ----
   // 主要障害名（10pt・回転なし・各色領域の中央）。
-  static const List<_RegionLabel> _mainLabels = [
-    _RegionLabel('Metabolic\nacidosis', '代謝性\nアシドーシス', 7.17, 8,
-        Colors.black87, widthFactor: 0.24),
-    _RegionLabel('Metabolic\nalkalosis', '代謝性\nアルカローシス', 7.50, 42,
-        Colors.black87, widthFactor: 0.26),
-    _RegionLabel('Acute\nrespiratory\nacidosis', '急性\n呼吸性\nアシドーシス', 7.225,
-        28, Colors.black87, widthFactor: 0.26),
-    _RegionLabel('Chronic\nrespiratory\nacidosis', '慢性\n呼吸性\nアシドーシス', 7.30,
-        38, Colors.black87, widthFactor: 0.26),
-    _RegionLabel('Acute\nrespiratory\nalkalosis', '急性\n呼吸性\nアルカローシス', 7.53,
-        20, Colors.black87, widthFactor: 0.24),
-    _RegionLabel('Chronic\nrespiratory\nalkalosis', '慢性\n呼吸性\nアルカローシス',
-        7.47, 14, Colors.black87, widthFactor: 0.26),
-  ];
+  List<_RegionLabel> _mainLabels() => [
+        _RegionLabel(l.rMetAcid, 7.17, 8, Colors.black87, widthFactor: 0.24),
+        _RegionLabel(l.rMetAlk, 7.50, 42, Colors.black87, widthFactor: 0.26),
+        _RegionLabel(l.rAcuteRespAcid, 7.225, 28, Colors.black87,
+            widthFactor: 0.26),
+        _RegionLabel(l.rChronicRespAcid, 7.30, 38, Colors.black87,
+            widthFactor: 0.26),
+        _RegionLabel(l.rAcuteRespAlk, 7.53, 20, Colors.black87,
+            widthFactor: 0.24),
+        _RegionLabel(l.rChronicRespAlk, 7.47, 14, Colors.black87,
+            widthFactor: 0.26),
+      ];
 
   // 混合・代償不全（8pt・赤・斜体・回転なし、各混合域の中心、枠内クランプ）。
-  static const List<_RegionLabel> _mixedLabels = [
-    _RegionLabel('Mixed\nResp.Acid.\n& Met. Alk.', '混合\n呼吸性アシ\n＋代謝性アルカ',
-        7.33, 52, Colors.red,
-        italic: true, fontSize: 8, widthFactor: 0.20, clamp: true),
-    _RegionLabel('Met.Alk.\nw/o expected\nResp. comp.', '代謝性アルカ\n代償不全なし',
-        7.62, 52, Colors.red,
-        italic: true, fontSize: 8, widthFactor: 0.20, clamp: true),
-    _RegionLabel('Mixed\nResp. & Met.\nAlkalosis', '混合\n呼吸性＋代謝性\nアルカローシス',
-        7.60, 33, Colors.red,
-        italic: true, fontSize: 8, widthFactor: 0.20, clamp: true),
-    _RegionLabel('Acute on\nChronic\nResp. Alk.', '急性 on 慢性\n呼吸性アルカ', 7.64,
-        10, Colors.red,
-        italic: true, fontSize: 8, widthFactor: 0.18, clamp: true),
-    _RegionLabel('Mixed\nMet.Acid.\n& Resp.Alk.', '混合\n代謝性アシ\n＋呼吸性アルカ',
-        7.42, 5, Colors.red,
-        italic: true, fontSize: 8, widthFactor: 0.20, clamp: true),
-    _RegionLabel('Mixed\nResp. & Met.\nAcidosis', '混合\n呼吸性＋代謝性\nアシドーシス',
-        7.13, 21, Colors.red,
-        italic: true, fontSize: 8, widthFactor: 0.18, clamp: true),
-    _RegionLabel('Met.Acid.\nw/o expected\nresp. comp.', '代謝性アシ\n代償不全なし',
-        7.09, 9, Colors.red,
-        italic: true, fontSize: 8, widthFactor: 0.18, clamp: true),
-    _RegionLabel('Acute on\nChronic\nResp. Acid.', '急性 on 慢性\n呼吸性アシ', 7.17,
-        34, Colors.red,
-        italic: true, fontSize: 8, widthFactor: 0.18, clamp: true),
-  ];
+  List<_RegionLabel> _mixedLabels() => [
+        _RegionLabel(l.mMixedRespAcidMetAlk, 7.33, 52, Colors.red,
+            italic: true, fontSize: 8, widthFactor: 0.20, clamp: true),
+        _RegionLabel(l.mMetAlkNoComp, 7.62, 52, Colors.red,
+            italic: true, fontSize: 8, widthFactor: 0.20, clamp: true),
+        _RegionLabel(l.mMixedRespMetAlk, 7.60, 33, Colors.red,
+            italic: true, fontSize: 8, widthFactor: 0.20, clamp: true),
+        _RegionLabel(l.mAcuteOnChronicRespAlk, 7.64, 10, Colors.red,
+            italic: true, fontSize: 8, widthFactor: 0.18, clamp: true),
+        _RegionLabel(l.mMixedMetAcidRespAlk, 7.42, 5, Colors.red,
+            italic: true, fontSize: 8, widthFactor: 0.20, clamp: true),
+        _RegionLabel(l.mMixedRespMetAcid, 7.13, 21, Colors.red,
+            italic: true, fontSize: 8, widthFactor: 0.18, clamp: true),
+        _RegionLabel(l.mMetAcidNoComp, 7.09, 9, Colors.red,
+            italic: true, fontSize: 8, widthFactor: 0.18, clamp: true),
+        _RegionLabel(l.mAcuteOnChronicRespAcid, 7.17, 34, Colors.red,
+            italic: true, fontSize: 8, widthFactor: 0.18, clamp: true),
+      ];
 
-  Offset _labelPos(_RegionLabel l) {
-    var pos = _p(l.ph, l.hco3);
-    if (l.clamp) {
+  Offset _labelPos(_RegionLabel label) {
+    var pos = _p(label.ph, label.hco3);
+    if (label.clamp) {
       pos = Offset(
         pos.dx.clamp(_plot.left + 4, _plot.right - 4),
         pos.dy.clamp(_plot.top + 4, _plot.bottom - 4),
@@ -558,24 +505,23 @@ class _CohenPainter extends CustomPainter {
     return pos;
   }
 
-  void _drawLabel(Canvas canvas, _RegionLabel l) {
-    final pos = _labelPos(l);
-    final text = lang == NomogramLang.en ? l.en : l.ja;
-    _text(canvas, text, pos,
-        color: l.color,
-        size: l.fontSize,
+  void _drawLabel(Canvas canvas, _RegionLabel label) {
+    final pos = _labelPos(label);
+    _text(canvas, label.text, pos,
+        color: label.color,
+        size: label.fontSize,
         center: true,
         middle: true,
-        italic: l.italic,
-        maxWidth: l.widthFactor * _plot.width);
+        italic: label.italic,
+        maxWidth: label.widthFactor * _plot.width);
   }
 
   void _drawLabels(Canvas canvas) {
-    for (final l in _mixedLabels) {
-      _drawLabel(canvas, l);
+    for (final label in _mixedLabels()) {
+      _drawLabel(canvas, label);
     }
-    for (final l in _mainLabels) {
-      _drawLabel(canvas, l);
+    for (final label in _mainLabels()) {
+      _drawLabel(canvas, label);
     }
     _drawNormalLabel(canvas);
   }
@@ -583,7 +529,7 @@ class _CohenPainter extends CustomPainter {
   /// 「Normal」は正常域（中央）に水平表示。
   void _drawNormalLabel(Canvas canvas) {
     final pos = _p(7.40, 24);
-    _text(canvas, lang == NomogramLang.en ? 'Normal' : '正常', pos,
+    _text(canvas, l.rNormal, pos,
         color: Colors.black87, size: 10, center: true, middle: true);
   }
 
@@ -604,7 +550,7 @@ class _CohenPainter extends CustomPainter {
               color: color,
               fontSize: size,
               height: 1.05,
-              fontFamily: _font,
+              fontFamily: fontFamily,
               fontStyle: italic ? FontStyle.italic : FontStyle.normal)),
       textAlign: TextAlign.center,
       textDirection: TextDirection.ltr,
@@ -626,7 +572,8 @@ class _CohenPainter extends CustomPainter {
     final tp = TextPainter(
       text: TextSpan(
           text: s,
-          style: TextStyle(color: color, fontSize: size, fontFamily: _font)),
+          style:
+              TextStyle(color: color, fontSize: size, fontFamily: fontFamily)),
       textDirection: TextDirection.ltr,
     )..layout();
     canvas.save();
@@ -640,6 +587,7 @@ class _CohenPainter extends CustomPainter {
   bool shouldRepaint(covariant _CohenPainter old) =>
       old.ph != ph ||
       old.hco3 != hco3 ||
-      old.lang != lang ||
+      old.l.runtimeType != l.runtimeType ||
+      old.fontFamily != fontFamily ||
       old.brightness != brightness;
 }

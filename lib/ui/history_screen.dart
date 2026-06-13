@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../data/history_repository.dart';
+import '../l10n/app_l.dart';
 import '../models/abg_input.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -44,27 +45,28 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppL.ofContext(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('入力履歴'),
+        title: Text(l.historyTitle),
         actions: [
           if (_entries.isNotEmpty)
             IconButton(
-              tooltip: 'すべて削除',
+              tooltip: l.historyDeleteAll,
               icon: const Icon(Icons.delete_sweep),
               onPressed: () async {
                 final ok = await showDialog<bool>(
                   context: context,
                   builder: (_) => AlertDialog(
-                    title: const Text('履歴をすべて削除'),
-                    content: const Text('保存された履歴をすべて削除しますか？'),
+                    title: Text(l.historyDeleteAllTitle),
+                    content: Text(l.historyDeleteAllBody),
                     actions: [
                       TextButton(
                           onPressed: () => Navigator.pop(context, false),
-                          child: const Text('キャンセル')),
+                          child: Text(l.cancel)),
                       FilledButton(
                           onPressed: () => Navigator.pop(context, true),
-                          child: const Text('削除')),
+                          child: Text(l.delete)),
                     ],
                   ),
                 );
@@ -79,7 +81,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _entries.isEmpty
-              ? const Center(child: Text('履歴はありません。'))
+              ? Center(child: Text(l.historyEmpty))
               : ListView.separated(
                   itemCount: _entries.length,
                   separatorBuilder: (_, __) => const Divider(height: 1),
@@ -100,12 +102,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       },
                       child: ListTile(
                         title: Text(e.primaryDiagnosis.isEmpty
-                            ? '解析結果'
+                            ? l.resultLabel
                             : e.primaryDiagnosis),
                         subtitle: Text(
                           '${_fmtDate(e.timestamp)}'
-                          '${e.venous ? ' ・静脈' : ' ・動脈'}'
-                          '${e.pediatric ? ' ・小児' : ''}\n'
+                          ' ・${e.venous ? l.tagVenous : l.tagArterial}'
+                          '${e.pediatric ? ' ・${l.tagPediatric}' : ''}\n'
                           'pH ${e.input.ph}  ${e.venous ? 'PvCO2' : 'PaCO2'} ${e.input.paco2}  HCO3- ${e.input.hco3}',
                         ),
                         isThreeLine: true,
