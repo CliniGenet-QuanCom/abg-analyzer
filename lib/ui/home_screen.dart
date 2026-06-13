@@ -45,7 +45,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   bool _pediatric = false;
   bool _venous = false;
-  AbgResult? _result;
   AbgInput? _lastInput;
 
   final OcrService _ocr = OcrService();
@@ -88,6 +87,16 @@ class _HomeScreenState extends State<HomeScreen> {
     return double.tryParse(t);
   }
 
+  /// 現在のロケール [l] で結果を組み立てる。
+  /// 言語切替に追従させるため結果は保持せず、表示・共有のたびに再生成する。
+  AbgResult? _buildResult(AppL l) {
+    final input = _lastInput;
+    if (input == null) return null;
+    final ranges =
+        ReferenceRanges.select(venous: _venous, pediatric: _pediatric);
+    return AbgAnalyzer.analyze(input, l: l, ranges: ranges);
+  }
+
   void _analyze() {
     final ph = _parse(_ph);
     final paco2 = _parse(_paco2);
@@ -121,7 +130,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final result = AbgAnalyzer.analyze(input, l: l, ranges: ranges);
 
     setState(() {
-      _result = result;
       _lastInput = input;
     });
 
@@ -152,7 +160,6 @@ class _HomeScreenState extends State<HomeScreen> {
       c.clear();
     }
     setState(() {
-      _result = null;
       _lastInput = null;
     });
   }
@@ -164,18 +171,20 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _copy() async {
-    if (_result == null) return;
     final l = AppL.ofContext(context);
-    await Clipboard.setData(ClipboardData(text: _result!.toShareText(l)));
+    final result = _buildResult(l);
+    if (result == null) return;
+    await Clipboard.setData(ClipboardData(text: result.toShareText(l)));
     _snack(l.snackCopied);
   }
 
   Future<void> _share() async {
-    if (_result == null) return;
     final l = AppL.ofContext(context);
+    final result = _buildResult(l);
+    if (result == null) return;
     try {
       await SharePlus.instance.share(
-        ShareParams(text: _result!.toShareText(l), subject: l.appTitle),
+        ShareParams(text: result.toShareText(l), subject: l.appTitle),
       );
     } catch (_) {
       await _copy(); // 共有が使えない環境ではコピーにフォールバック
@@ -249,7 +258,7 @@ class _HomeScreenState extends State<HomeScreen> {
         count++;
       }
     });
-    setState(() => _result = null);
+    setState(() => _lastInput = null);
     if (mounted) _snack(AppL.ofContext(context).snackOcrApplied(count));
   }
 
@@ -269,7 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _pediatric = pediatric;
       _venous = venous;
-      _result = null;
+      _lastInput = null;
     });
   }
 
@@ -281,6 +290,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final l = AppL.ofContext(context);
+    final result = _buildResult(l);
     return Scaffold(
       appBar: AppBar(
         title: Text(l.appBarTitle),
@@ -379,7 +389,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-            if (_result != null) ...[
+            if (result != null) ...[
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -401,7 +411,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              ResultView(result: _result!),
+              ResultView(result: result),
               if (_lastInput != null) ...[
                 const SizedBox(height: 8),
                 Card(
@@ -431,7 +441,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         CohenNomogram(
                           ph: _lastInput!.ph,
                           hco3: _lastInput!.hco3,
-                          classification: _result!.primaryDiagnosis,
+                          classification: result.primaryDiagnosis,
                         ),
                       ],
                     ),
@@ -463,7 +473,7 @@ class _HomeScreenState extends State<HomeScreen> {
         selected: {_venous},
         onSelectionChanged: (s) => setState(() {
           _venous = s.first;
-          _result = null;
+          _lastInput = null;
         }),
       ),
     );

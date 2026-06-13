@@ -1,7 +1,7 @@
 name: blood_gas_analyzer
 description: "Blood Gas Analyzer - 動脈血/静脈血ガス（ABG/VBG）結果の解釈を支援するローカル動作アプリ。"
 publish_to: 'none'
-version: 1.2.0+3
+version: 1.2.1+4
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
