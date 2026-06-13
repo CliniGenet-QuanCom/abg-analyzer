@@ -25,7 +25,13 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "assets/icon/app_icon.png"
+  # 通常ミップマップ（Android 8.0 未満 / フォールバック）
+  image_path: "assets/icon/app_icon_adaptive.png"
+  # アダプティブアイコン（Android 8.0+ / API 26+）
+  # foreground・background 両方に同じフルブリード画像を指定することで
+  # 白背景が合成されるのを防ぐ
+  adaptive_icon_foreground: "assets/icon/app_icon_adaptive.png"
+  adaptive_icon_background: "assets/icon/app_icon_adaptive.png"
   min_sdk_android: 21
   web:
     generate: false
